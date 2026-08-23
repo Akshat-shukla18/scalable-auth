@@ -9,6 +9,7 @@ An enterprise-grade, horizontally scalable authentication platform built with No
 - **Distributed Rate Limiting**: Atomic sliding-window rate limiters per IP / Account / Route backed by Redis.
 - **Rotating Refresh Token Sessions**: Single-use rotating refresh tokens stored in secure HttpOnly cookies with automatic reuse detection & family revocation.
 - **Real-Time Observability**: Live system metrics telemetry, health probes (`/health`, `/ready`), and Swagger API documentation.
+<img width="1376" height="784" alt="Screenshot 2026-08-23 110801" src="https://github.com/user-attachments/assets/da45efce-74d7-48cc-9711-90f1e2c36ecc" />
 
 ## Quick Start (Local Development)
 
