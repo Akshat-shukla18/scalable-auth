@@ -1,0 +1,178 @@
+import { Request, Response, NextFunction } from "express";
+import { authService, AuthService } from "./auth.service.js";
+import { setRefreshTokenCookie, clearRefreshTokenCookie } from "../../utils/cookies.js";
+import { AUTH_COOKIE_NAME } from "../../config/constants.js";
+import { ApiSuccessResponse } from "@scalable-auth/shared";
+
+export class AuthController {
+  constructor(private service: AuthService = authService) {}
+
+  register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.service.register(req.body);
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: result,
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(201).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.service.verifyEmail(req.body);
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: result,
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  resendCode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.service.resendVerificationCode(req.body);
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: result,
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const meta = {
+        userAgent: req.get("user-agent"),
+        ipAddress: req.ip
+      };
+      const { authData, rawRefreshToken } = await this.service.login(req.body, meta);
+      setRefreshTokenCookie(res, rawRefreshToken);
+
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: authData,
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  refresh = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawRefreshToken = req.cookies[AUTH_COOKIE_NAME] || req.body?.refreshToken;
+      const meta = {
+        userAgent: req.get("user-agent"),
+        ipAddress: req.ip
+      };
+
+      const { authData, newRawRefreshToken } = await this.service.refreshTokens(rawRefreshToken, meta);
+      setRefreshTokenCookie(res, newRawRefreshToken);
+
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: authData,
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      clearRefreshTokenCookie(res);
+      next(err);
+    }
+  };
+
+  logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawRefreshToken = req.cookies[AUTH_COOKIE_NAME];
+      const sessionId = req.user?.sessionId;
+
+      await this.service.logout(rawRefreshToken, sessionId);
+      clearRefreshTokenCookie(res);
+
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: { message: "Successfully logged out" },
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  logoutAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user?.id) return next(new Error("Unauthorized"));
+      await this.service.logoutAll(req.user.id);
+      clearRefreshTokenCookie(res);
+
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: { message: "Successfully revoked all sessions across devices" },
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  forgotPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.service.forgotPassword(req.body);
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: result,
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.service.resetPassword(req.body);
+      clearRefreshTokenCookie(res);
+
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: result,
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  me = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user?.id) return next(new Error("Unauthorized"));
+      const user = await this.service.getMe(req.user.id);
+
+      const response: ApiSuccessResponse = {
+        success: true,
+        data: { user, sessionId: req.user.sessionId },
+        meta: { requestId: req.id, timestamp: new Date().toISOString() }
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+export const authController = new AuthController();

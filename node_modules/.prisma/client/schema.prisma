@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VerificationCodeType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+model User {
+  id                String             @id @default(uuid())
+  name              String
+  email             String             @unique
+  passwordHash      String
+  emailVerified     Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  verificationCodes VerificationCode[]
+  sessions          Session[]
+
+  @@index([email])
+}
+
+model VerificationCode {
+  id          String               @id @default(uuid())
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash    String
+  type        VerificationCodeType @default(EMAIL_VERIFICATION)
+  expiresAt   DateTime
+  attempts    Int                  @default(0)
+  maxAttempts Int                  @default(5)
+  usedAt      DateTime?
+  createdAt   DateTime             @default(now())
+
+  @@index([userId, type, usedAt])
+  @@index([expiresAt])
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([refreshTokenHash])
+  @@index([expiresAt])
+}
