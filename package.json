@@ -1,0 +1,32 @@
+{
+  "name": "scalable-auth-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Production-Style Scalable Authentication Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev --workspace=@scalable-auth/api",
+    "dev:web": "npm run dev --workspace=@scalable-auth/web",
+    "dev:worker": "npm run worker --workspace=@scalable-auth/api",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:unit": "npm run test:unit --workspace=@scalable-auth/api",
+    "test:integration": "npm run test:integration --workspace=@scalable-auth/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace=@scalable-auth/api",
+    "db:migrate": "npm run db:migrate --workspace=@scalable-auth/api",
+    "db:push": "npm run db:push --workspace=@scalable-auth/api",
+    "db:seed": "npm run db:seed --workspace=@scalable-auth/api",
+    "load-test": "node tests/load/run-k6.js"
+  },
+  "devDependencies": {
+    "@esbuild/win32-x64": "^0.28.2",
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  }
+}
