@@ -1,6 +1,12 @@
 # Production-Style Scalable Authentication Platform
 
+[![CI](https://github.com/Akshat-shukla18/scalable-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/Akshat-shukla18/scalable-auth/actions/workflows/ci.yml)
+
 An enterprise-grade, horizontally scalable authentication platform built with Node.js, Express, TypeScript, PostgreSQL, Redis, BullMQ, and React.
+
+## CI Status
+
+This project includes a GitHub Actions workflow that validates type-checking, build output, and tests on every push and pull request.
 
 ## Key Features
 - **Stateless Horizontal Scaling**: Multi-instance API cluster behind Nginx load balancer (`least_conn`).
