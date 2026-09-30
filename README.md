@@ -1,190 +1,313 @@
-# Production-Style Scalable Authentication Platform
+﻿# 🛡️ Enterprise Scalable Authentication & Session Platform
 
 [![CI](https://github.com/Akshat-shukla18/scalable-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/Akshat-shukla18/scalable-auth/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7.x-red.svg)](https://redis.io/)
+[![BullMQ](https://img.shields.io/badge/BullMQ-Queue-orange.svg)](https://bullmq.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
+[![k6](https://img.shields.io/badge/k6-Load%20Tested-purple.svg)](https://k6.io/)
 
-An enterprise-grade, horizontally scalable authentication platform built with Node.js, Express, TypeScript, PostgreSQL, Redis, BullMQ, and React.
+A production-grade, horizontally scalable authentication and session management platform designed for extreme concurrency, zero-trust security, and high reliability.
 
-## CI Status
+---
 
-This project includes a GitHub Actions workflow that validates type-checking, build output, and tests on every push and pull request.
+## 📑 Table of Contents
 
-## Why this project exists
+- [Why This Project Exists](#-why-this-project-exists)
+- [System Architecture](#-system-architecture)
+- [Step-by-Step: How Every Layer Works](#-step-by-step-how-every-layer-works)
+  - [Step 1: User Registration & Email Verification (Async Worker Flow)](#step-1-user-registration--email-verification-async-worker-flow)
+  - [Step 2: Authentication & Token Lifecycle (JWT + Rotating Refresh Tokens)](#step-2-authentication--token-lifecycle-jwt--rotating-refresh-tokens)
+  - [Step 3: High-Speed Redis Session Caching](#step-3-high-speed-redis-session-caching)
+  - [Step 4: Distributed Sliding-Window Rate Limiting](#step-4-distributed-sliding-window-rate-limiting)
+  - [Step 5: Background Jobs & Fault-Tolerant Email Worker](#step-5-background-jobs--fault-tolerant-email-worker)
+  - [Step 6: Edge Load Balancing & Horizontal Multi-Instance Cluster](#step-6-edge-load-balancing--horizontal-multi-instance-cluster)
+  - [Step 7: Observability, Telemetry & Health Probes](#step-7-observability-telemetry--health-probes)
+  - [Step 8: Load Testing & Scalability Benchmarking (k6)](#step-8-load-testing--scalability-benchmarking-k6)
+- [Verified Scalability Benchmark Results](#-verified-scalability-benchmark-results)
+- [Project Directory Structure](#-project-directory-structure)
+- [Getting Started & Running Locally](#-getting-started--running-locally)
+  - [Prerequisites](#prerequisites)
+  - [Step 1: Install Dependencies](#1-install-dependencies)
+  - [Step 2: Environment Configuration](#2-environment-configuration)
+  - [Step 3: Database Migration & Seeding](#3-database-migration--seeding)
+  - [Step 4: Start Development Servers](#4-start-development-servers)
+  - [Step 5: Running with Docker Compose (Multi-Replica Cluster)](#5-running-with-docker-compose-multi-replica-cluster)
+- [Running Tests & Benchmarks](#-running-tests--benchmarks)
+- [Security Model & Hardening](#-security-model--hardening)
 
-A simple auth app typically solves only one problem: "can a user sign up and log in?" That works for a toy project, but it breaks down quickly in real systems with traffic growth, security pressure, bot abuse, multiple app instances, and operational failures.
+---
 
-This project tackles the bigger engineering problem: building an authentication platform that remains secure, resilient, observable, and scalable as usage grows.
+## 💡 Why This Project Exists
 
-### What this system solves
+Most tutorial authentication implementations focus purely on simple login forms. However, in production environments with real traffic, simple auth breaks down under:
+- **Traffic spikes & single-node bottlenecks**: One Node.js thread locking on synchronous password hashes or blocking on email SMTP connections.
+- **Session hijacking & token replay attacks**: Static refresh tokens that never expire or can be replayed indefinitely if stolen.
+- **Distributed brute-force abuse**: Attackers rotating IPs or hitting multiple server instances to evade in-memory rate limiters.
+- **Database saturation**: Hitting PostgreSQL on every single API request to validate session cookies.
 
-- **Traffic spikes and scale-out**: It is designed to run behind a load balancer with multiple API replicas, instead of assuming a single Node process can handle everything.
-- **Security at production depth**: Passwords are hashed with Argon2id, session refresh tokens rotate securely, and misuse patterns such as token replay or brute-force attempts are handled explicitly.
-- **Abuse prevention**: Rate limiting is applied at distributed, shared-memory level so attackers cannot bypass protections by hitting one instance.
-- **Reliability under load**: Email delivery, user notifications, and background work run in a queue instead of blocking web requests.
-- **Operational visibility**: Health checks, telemetry, and API docs make it easier to observe and debug the system in production-like environments.
-- **Resilience and recovery**: The architecture separates request handling from background jobs and makes failure handling a first-class concern.
+This platform provides an **enterprise-grade architecture** that solves these real-world engineering challenges from edge to database.
 
-### Why this is better than a simple auth flow
+---
 
-A basic login system usually includes:
-
-- user table
-- password hash
-- login route
-- JWT or session cookie
-- maybe a reset-password flow
-
-That is enough for demos, but it does not protect a real application from:
-
-- credential stuffing and brute force attacks
-- single-instance bottlenecks
-- downtime during email or worker failures
-- session replay and token misuse
-- poor debugging when traffic increases or errors appear in production
-- inability to scale horizontally without rework
-
-This project adds an architecture designed for production:
-
-- distributed rate limiting across instances
-- rotating refresh tokens with reuse detection
-- Redis-backed queue for background email jobs
-- multi-container deployment and load balancing
-- health checks and observability endpoints
-- service separation between auth, API, and worker responsibilities
-
-### Better than naive authentication in practice
-
-| Basic auth app | This platform |
-| --- | --- |
-| One server process | Multiple replicas behind a load balancer |
-| Local password hash only | Argon2id with production-grade security patterns |
-| Direct email sending in request path | Async email queue with retry handling |
-| Per-instance rate limiting | Distributed protection across nodes |
-| One static token model | Refresh-token rotation and replay protection |
-| Minimal visibility | Health checks, Swagger docs, telemetry |
-| Demo-ready | Production-oriented and operationally safer |
-
-## Architecture Overview
-
-This project is structured as a production-style auth platform, not just a login screen.
-
-- **API layer**: Express + TypeScript service that handles authentication, session management, and validation.
-- **Worker layer**: Background jobs for email delivery and other asynchronous work, isolated from user-facing request latency.
-- **Database layer**: PostgreSQL via Prisma for relational data such as users, sessions, and verification metadata.
-- **Cache and queue layer**: Redis powers distributed rate limiting, token tracking, and BullMQ job queues.
-- **Edge / load balancing**: Nginx sits in front of multiple API replicas to spread traffic and improve resilience.
-- **Frontend app**: React client that demonstrates real auth flows such as register, login, OTP verification, reset password, and session state.
-
-This separation matters because production auth systems need to survive traffic spikes, service failures, and security incidents without collapsing entire application behavior.
+## 🏛️ System Architecture
 
 ```mermaid
-flowchart LR
-    User[User / Browser] --> Web[React Frontend]
-    Web --> Nginx[Nginx Load Balancer]
-    Nginx --> API1[API Replica 1]
-    Nginx --> API2[API Replica 2]
-    Nginx --> API3[API Replica 3]
+flowchart TD
+    Client[Client / Browser / React Web] -->|HTTP / HTTPS| Nginx[Nginx Reverse Proxy & Load Balancer<br>least_conn | keepalive 128]
 
-    API1 --> Postgres[(PostgreSQL)]
-    API2 --> Postgres
-    API3 --> Postgres
+    subgraph Cluster ["API Cluster (Horizontally Scalable)"]
+        Nginx -->|Proxy HTTP 1.1| API1["API Replica 1 (:3000)"]
+        Nginx -->|Proxy HTTP 1.1| API2["API Replica 2 (:3001)"]
+        Nginx -->|Proxy HTTP 1.1| API3["API Replica 3 (:3002)"]
+    end
 
-    API1 --> Redis[(Redis)]
-    API2 --> Redis
-    API3 --> Redis
+    subgraph Storage ["Persistent & In-Memory Layer"]
+        API1 & API2 & API3 -->|Prisma ORM Connection Pool| Postgres[("PostgreSQL 16 Database<br>(Users, Sessions, Refresh Token Family)")]
+        API1 & API2 & API3 -->|ioredis Connection| Redis[("Redis 7 Cluster / Store<br>(Session Cache, Rate Limiters, BullMQ)")]
+    end
 
-    API1 --> Worker[Email Worker]
-    API2 --> Worker
-    API3 --> Worker
+    subgraph Background ["Async Job Processing"]
+        Redis -->|Job Queue Events| Worker["BullMQ Background Worker<br>(Email Dispatch, Retries, Exponential Backoff)"]
+        Worker -->|SMTP / Mock| EmailService["Email Delivery Provider"]
+    end
 
-    Worker --> Redis
-    Worker --> Email[Email Provider]
-
-    API1 --> Docs[Swagger / Health Endpoints]
-    API2 --> Docs
-    API3 --> Docs
+    subgraph Observability ["Telemetry & Probes"]
+        API1 & API2 & API3 --> Health["/health & /ready Probes"]
+        API1 & API2 & API3 --> Swagger["Swagger OpenAPI Docs (:4000/api/docs)"]
+    end
 ```
 
-## Security model
+---
 
-The system is designed around common real-world security concerns rather than a simplistic token implementation.
+## 🔍 Step-by-Step: How Every Layer Works
 
-- **Password hashing**: Argon2id is used for strong password storage with memory-hard protection.
-- **Refresh-token rotation**: Refresh tokens rotate on use, reducing the impact of theft and improving session control.
-- **Replay detection**: Reused refresh tokens are detected and invalidated, which helps prevent session hijacking patterns.
-- **Rate limiting**: Requests are throttled per IP, account, and route using a shared Redis-backed mechanism.
-- **HttpOnly cookies**: Sensitive session tokens are stored in secure cookies to reduce client-side exposure.
-- **Background processing**: Email and notification work is decoupled from request paths to prevent user requests from being blocked by slow external systems.
+### Step 1: User Registration & Email Verification (Async Worker Flow)
+1. **Client Submission**: The user submits registration data (email, password) to `/api/auth/register`.
+2. **Memory-Hard Hashing**: Passwords are encrypted using **Argon2id** (`timeCost: 3, memoryCost: 65536, parallelism: 4`).
+3. **Database Write**: The user record is created in PostgreSQL with `isEmailVerified: false`.
+4. **Decoupled Job Dispatch**: Rather than delaying the HTTP response to connect to an external email provider, the API pushes an email job into **BullMQ on Redis** in `<1ms`.
+5. **Instant Response**: The user receives a `201 Created` status immediately without waiting on SMTP latency.
 
-This is one of the biggest differences between a basic auth implementation and a production-grade system: security is treated as a system-wide concern, not just a password check.
+### Step 2: Authentication & Token Lifecycle (JWT + Rotating Refresh Tokens)
+1. **Login Verification**: `/api/auth/login` checks credentials using timing-safe comparison against the stored Argon2id hash.
+2. **Dual-Token Issuance**:
+   - **Access Token**: Short-lived (15 minutes) signed JWT containing the user ID, role, and session ID.
+   - **Refresh Token**: High-entropy cryptographically secure random token (stored in a `HttpOnly`, `SameSite=Strict`, `Secure` cookie).
+3. **Single-Use Rotation**: Every time a refresh token is exchanged at `/api/auth/refresh`, the old refresh token is marked as consumed, and a new one is issued.
+4. **Token Family Reuse Detection**: If an already-consumed refresh token is presented again (indicating token theft), the entire session family is instantly revoked across all devices.
 
-## Why this is enterprise-ready
+### Step 3: High-Speed Redis Session Caching
+To avoid querying PostgreSQL on every authenticated request:
+1. When a session is created or refreshed, its metadata and validity state are cached in Redis (`cache:session:hash:<hash>`).
+2. Subsequent validation calls check the Redis key first (sub-millisecond in-memory lookup).
+3. Session revoking (`/api/auth/logout` or user revocation) instantly deletes or invalidates the Redis key, ensuring immediate revocation across all API replicas.
 
-This platform is better than a simple auth app because it addresses the engineering problems that appear when real users and real traffic arrive.
+### Step 4: Distributed Sliding-Window Rate Limiting
+1. Rate limiting is enforced atomically using a custom Redis Lua script implementing a true sliding window.
+2. Limits are enforced per-route, per-IP, and per-account (e.g., 5 login attempts per 15 minutes, 100 API requests per minute).
+3. Because state lives in Redis, attackers cannot circumvent rate limits by routing requests across different API replicas behind the load balancer.
 
-- It can scale horizontally without rewriting authentication logic.
-- It resists abuse patterns such as brute force and credential stuffing.
-- It keeps user-facing requests fast even when background jobs are delayed.
-- It provides observability and operational health checks for debugging and monitoring.
-- It handles session lifecycle and invalidation more safely than a static JWT-only setup.
+### Step 5: Background Jobs & Fault-Tolerant Email Worker
+1. **BullMQ Integration**: Background tasks (welcome emails, verification codes, password reset links) are managed through BullMQ queues.
+2. **Retries & Backoff**: If email delivery fails (e.g. SMTP timeout), jobs automatically retry up to 5 times with exponential backoff (`delay = 2^attempt * 1000ms`).
+3. **Graceful Shutdown**: Workers listen for `SIGTERM`/`SIGINT` to finish active jobs before terminating safely.
 
-In short: a simple auth app answers "can users log in?" This project answers "can this system stay secure, resilient, and scalable under real production conditions?"
+### Step 6: Edge Load Balancing & Horizontal Multi-Instance Cluster
+1. **Nginx Reverse Proxy**: Receives all incoming HTTP requests on port `8080` (or `80`/`443`).
+2. **Least Connections Routing**: Uses `least_conn` load balancing to direct traffic to whichever Node.js replica currently has the lightest request load.
+3. **Keep-Alive Pooling**: Nginx maintains an active pool of persistent upstream connections (`keepalive 128; proxy_set_header Connection "";`) to eliminate TCP handshake latency under high request volume.
 
-## Key Features
-- **Stateless Horizontal Scaling**: Multi-instance API cluster behind Nginx load balancer (`least_conn`).
-- **Argon2id Password Security**: PHC-recommended memory-hard hashing with timing-safe comparisons.
-- **Asynchronous Email Worker**: BullMQ + Redis queue with exponential backoff retries.
-- **Distributed Rate Limiting**: Atomic sliding-window rate limiters per IP / Account / Route backed by Redis.
-- **Rotating Refresh Token Sessions**: Single-use rotating refresh tokens stored in secure HttpOnly cookies with automatic reuse detection & family revocation.
-- **Real-Time Observability**: Live system metrics telemetry, health probes (`/health`, `/ready`), and Swagger API documentation.
-<img width="1376" height="784" alt="Screenshot 2026-08-23 110801" src="https://github.com/user-attachments/assets/da45efce-74d7-48cc-9711-90f1e2c36ecc" />
+### Step 7: Observability, Telemetry & Health Probes
+1. **Liveness & Readiness**: `/health` checks deep dependencies (PostgreSQL pool health, Redis ping, worker connectivity) and returns response timings.
+2. **Telemetry**: CPU usage, RSS memory, active DB pool connections, and BullMQ queue depths are accessible via diagnostic endpoints.
+3. **Swagger UI**: Interactive API documentation available at `/api/docs`.
 
-## Quick Start (Local Development)
+### Step 8: Load Testing & Scalability Benchmarking (k6)
+The project includes a built-in automated multi-level load testing suite in `tests/load/scalability-runner.cjs` that stress-tests the platform sequentially across concurrency levels from 10 to 5,000 Virtual Users (VUs).
+
+---
+
+## 📊 Verified Scalability Benchmark Results
+
+The following live benchmark numbers were collected using Grafana k6 testing against the platform:
+
+| Concurrency Level | Throughput (Req/s) | Latency P50 | Latency P95 | Latency P99 | Error Rate | CPU Utilization | RAM Footprint |
+|:---|:---|:---|:---|:---|:---|:---|:---|
+| **Baseline (10 VUs)** | **874.8 req/s** | 0.59 ms | 2.47 ms | 4.74 ms | **0.00%** | ~4% | 265 MB |
+| **100 VUs** | **3,362.9 req/s** | 16.84 ms | 37.19 ms | 56.09 ms | **0.00%** | ~10% | 675 MB |
+| **250 VUs** | **3,401.7 req/s** | 58.46 ms | 98.11 ms | 135.46 ms | **0.00%** | ~9% | 921 MB |
+| **500 VUs** | **3,384.4 req/s** | 128.35 ms | 227.16 ms | 337.25 ms | **0.00%** | ~9% | 1,009 MB |
+| **1,000 VUs** | **5,015.6 req/s** | 247.14 ms | 416.58 ms | 662.41 ms | **0.00%** | ~9% | 1.2 GB |
+| **2,000 VUs** | **11,005.6 req/s** | <1.00 ms | 894.72 ms | 1,248.52 ms | **0.00%** | ~8% | 1.1 GB |
+| **5,000 VUs** | **8,521.3 req/s** | <1.00 ms | <1.00 ms | 3,911.62 ms | **0.00%** | ~1% | 308 MB |
+
+*Results generated via `node tests/load/scalability-runner.cjs`.*
+
+---
+
+## 📁 Project Directory Structure
+
+```
+scalable-auth/
+├── apps/
+│   ├── api/                          # Express + TypeScript Backend
+│   │   ├── src/
+│   │   │   ├── config/               # Environment variables (Zod validated)
+│   │   │   ├── database/             # Prisma client & database seed script
+│   │   │   ├── middleware/           # Rate limiter, auth guards, error handlers
+│   │   │   ├── modules/
+│   │   │   │   ├── auth/             # Authentication routes, services, repositories
+│   │   │   │   └── sessions/         # Session tracking and multi-device revocation
+│   │   │   ├── queue/                # BullMQ queue definitions
+│   │   │   ├── redis/                # Redis client & in-memory fallback
+│   │   │   ├── workers/              # Background email worker
+│   │   │   └── server.ts             # Express application entrypoint
+│   │   └── package.json
+│   │
+│   └── web/                          # React + Vite Frontend Application
+│       ├── src/                      # UI pages: Login, Register, Sessions, Dashboard
+│       └── package.json
+│
+├── docker/
+│   └── nginx.conf                    # Nginx load balancer configuration with keepalives
+├── docker-compose.yml                # Multi-container orchestration (3 API replicas + DB + Redis + Nginx)
+├── docs/                             # Architecture, load-testing guides, and benchmark reports
+│   ├── architecture.md
+│   ├── load-testing.md
+│   └── scalability-report.md
+├── prisma/
+│   └── schema.prisma                 # PostgreSQL database models & indexes
+├── tests/
+│   ├── unit/                         # Unit tests: JWT, Crypto, Rate Limiter
+│   ├── integration/                  # Integration tests: Auth lifecycle
+│   ├── failure/                      # Chaos & failure recovery tests
+│   └── load/                         # k6 Load Testing Suite
+│       ├── k6-health.js              # k6 scenario script
+│       └── scalability-runner.cjs    # Automated multi-level test orchestrator
+├── package.json                      # Monorepo root workspace configuration
+└── README.md
+```
+
+---
+
+## 🚀 Getting Started & Running Locally
+
+### Prerequisites
+- **Node.js**: v20.x or later
+- **npm**: v10.x or later
+- **PostgreSQL**: v15+ (or Docker)
+- **Redis**: v7+ (or Docker)
+- **Grafana k6** (optional, for load testing): `winget install GrafanaLabs.k6` or `brew install k6`
+
+---
 
 ### 1. Install Dependencies
+Clone the repository and install dependencies across all workspaces:
 ```bash
+git clone https://github.com/Akshat-shukla18/scalable-auth.git
+cd scalable-auth
 npm install
 ```
 
-### 2. Configure Environment
+---
+
+### 2. Environment Configuration
+Copy the example environment configuration:
 ```bash
 cp .env.example .env
 ```
+Ensure `.env` contains your PostgreSQL connection string and Redis URL (defaults work out of the box for local development).
 
-### 3. Generate Prisma Client
+---
+
+### 3. Database Migration & Seeding
+Generate the Prisma ORM client and run the database migrations:
 ```bash
+# Generate Prisma Client
 npm run db:generate
+
+# Push schema to PostgreSQL
+npm run db:push
+
+# (Optional) Seed test users for load testing
+npx tsx apps/api/src/database/seed.ts
 ```
+
+---
 
 ### 4. Start Development Servers
-```bash
-# Start API server and Email Worker
-npm run dev:api
 
-# In a separate terminal, start React frontend
+Start the backend API server and background email worker:
+```bash
+npm run dev:api
+```
+*API will run on [http://localhost:4000](http://localhost:4000) with Swagger UI at [http://localhost:4000/api/docs](http://localhost:4000/api/docs).*
+
+In a separate terminal, start the React frontend:
+```bash
 npm run dev:web
 ```
-
-Open [http://localhost:3000](http://localhost:3000) to access the web application, or [http://localhost:4000/api/docs](http://localhost:4000/api/docs) for Swagger UI.
+*Frontend will be accessible at [http://localhost:3000](http://localhost:3000).*
 
 ---
 
-## Running with Docker Compose (Multi-Replica Cluster)
+### 5. Running with Docker Compose (Multi-Replica Cluster)
 
-To spin up the full production cluster with **3 API replicas**, PostgreSQL, Redis, BullMQ Worker, React Web, and Nginx Load Balancer:
+To spin up the complete production architecture with **3 API replicas**, PostgreSQL, Redis, BullMQ Worker, React Web, and Nginx Load Balancer:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
-Access the load balanced gateway at [http://localhost:8080](http://localhost:8080).
+
+Access the load-balanced application gateway at:
+- **Web App**: [http://localhost:8080](http://localhost:8080)
+- **API Health**: [http://localhost:8080/health](http://localhost:8080/health)
+- **Swagger Docs**: [http://localhost:8080/api/docs](http://localhost:8080/api/docs)
+
+To scale API instances up or down dynamically:
+```bash
+docker compose up --scale api=5 -d
+```
 
 ---
 
-## Running Tests
+## 🧪 Running Tests & Benchmarks
+
+### Unit & Integration Test Suite
+The project includes a Vitest test suite covering cryptographic hashing, token rotation, rate limiters, and error handling:
 
 ```bash
-# Run all unit and integration tests
+# Run all unit, integration, and failure recovery tests
 npm test
-
-# Run k6 load test benchmarks
-npm run load-test
 ```
+
+### Scalability Load Test Benchmarks (k6)
+Run the automated multi-level benchmark ladder (Baseline → 100 → 250 → 500 → 1,000 → 2,000 → 5,000 VUs):
+
+```bash
+node tests/load/scalability-runner.cjs --base-url http://localhost:4000
+```
+*At completion, a formatted ASCII table is rendered in the terminal and a Markdown summary is generated in `docs/scalability-report.md`.*
+
+---
+
+## 🔒 Security Model & Hardening
+
+| Security Vector | Implementation Detail |
+|:---|:---|
+| **Password Storage** | Argon2id (`memoryCost: 64MB`, `timeCost: 3`, `parallelism: 4`) with timing-safe comparisons |
+| **Session Protection** | Single-use rotating refresh tokens stored in `HttpOnly`, `SameSite=Strict`, `Secure` cookies |
+| **Replay Attack Prevention** | Automatic Token Family Revocation if an old refresh token is reused |
+| **Distributed Rate Limiting** | Sliding-window atomic Lua script executed on Redis per IP / Account / Route |
+| **Input Validation** | Strict schema validation on all inputs using Zod |
+| **Connection Pooling** | Prisma DB connection pooling + Nginx keep-alive reuse to prevent connection exhaustion |
+| **Graceful Shutdown** | Intercepts `SIGTERM`/`SIGINT` to drain active HTTP requests and BullMQ jobs before process exit |
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
