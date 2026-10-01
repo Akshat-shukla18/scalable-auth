@@ -1,8 +1,9 @@
 import { ZodError } from "zod";
-import { JsonWebTokenError, TokenExpiredError } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import { AuthErrorCode } from "@scalable-auth/shared";
 import { logger } from "../config/logger.js";
 import { env } from "../config/env.js";
+const { JsonWebTokenError, TokenExpiredError } = jwt;
 export class AppError extends Error {
     statusCode;
     code;
@@ -36,12 +37,12 @@ export function errorHandler(err, req, res, next) {
             message: e.message
         }));
     }
-    else if (err instanceof TokenExpiredError) {
+    else if (TokenExpiredError && err instanceof TokenExpiredError) {
         statusCode = 401;
         code = AuthErrorCode.UNAUTHORIZED;
         message = "Authentication access token has expired.";
     }
-    else if (err instanceof JsonWebTokenError) {
+    else if (JsonWebTokenError && err instanceof JsonWebTokenError) {
         statusCode = 401;
         code = AuthErrorCode.UNAUTHORIZED;
         message = "Invalid authentication access token.";

@@ -1,4 +1,4 @@
-﻿import { prisma } from "../../database/prisma.js";
+import { prisma } from "../../database/prisma.js";
 import { VerificationCodeType, User, Session, VerificationCode } from "@prisma/client";
 import { env } from "../../config/env.js";
 
