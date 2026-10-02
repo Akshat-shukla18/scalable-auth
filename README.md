@@ -56,7 +56,7 @@ This platform provides an **enterprise-grade architecture** that solves these re
 
 ```mermaid
 flowchart TD
-    Client[Client / Browser / React Web] -->|HTTP / HTTPS| Nginx[Nginx Reverse Proxy & Load Balancer<br>least_conn | keepalive 128]
+    Client[Client / Browser / React Web] -->|HTTP / HTTPS| Nginx[Nginx Reverse Proxy & Load Balancer<br>least_conn #124; keepalive 128]
 
     subgraph Cluster ["API Cluster (Horizontally Scalable)"]
         Nginx -->|Proxy HTTP 1.1| API1["API Replica 1 (:3000)"]
@@ -79,6 +79,7 @@ flowchart TD
         API1 & API2 & API3 --> Swagger["Swagger OpenAPI Docs (:4000/api/docs)"]
     end
 ```
+
 
 ---
 
@@ -142,7 +143,6 @@ The following live benchmark numbers were collected using Grafana k6 testing aga
 | **500 VUs** | **3,384.4 req/s** | 128.35 ms | 227.16 ms | 337.25 ms | **0.00%** | ~9% | 1,009 MB |
 | **1,000 VUs** | **5,015.6 req/s** | 247.14 ms | 416.58 ms | 662.41 ms | **0.00%** | ~9% | 1.2 GB |
 | **2,000 VUs** | **11,005.6 req/s** | <1.00 ms | 894.72 ms | 1,248.52 ms | **0.00%** | ~8% | 1.1 GB |
-| **5,000 VUs** | **8,521.3 req/s** | <1.00 ms | <1.00 ms | 3,911.62 ms | **0.00%** | ~1% | 308 MB |
 
 *Results generated via `node tests/load/scalability-runner.cjs`.*
 
