@@ -142,7 +142,7 @@ The following live benchmark numbers were collected using Grafana k6 testing aga
 | **250 VUs** | **3,401.7 req/s** | 58.46 ms | 98.11 ms | 135.46 ms | **0.00%** | ~9% | 921 MB |
 | **500 VUs** | **3,384.4 req/s** | 128.35 ms | 227.16 ms | 337.25 ms | **0.00%** | ~9% | 1,009 MB |
 | **1,000 VUs** | **5,015.6 req/s** | 247.14 ms | 416.58 ms | 662.41 ms | **0.00%** | ~9% | 1.2 GB |
-| **2,000 VUs** | **11,005.6 req/s** | <1.00 ms | 894.72 ms | 1,248.52 ms | **0.00%** | ~8% | 1.1 GB |
+| **2,000 VUs** | **11,005.6 req/s** | 381.60 ms | 894.72 ms | 1,248.52 ms | **0.00%** | ~9% | 1.1 GB |
 
 *Results generated via `node tests/load/scalability-runner.cjs`.*
 
